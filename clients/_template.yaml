@@ -10,6 +10,8 @@ logo: assets/klant-slug/logo-1200.png   # 1:1, min 128x128, aanbevolen 1200x1200
 # Gmail: filter nieuwsbrieven naar dit label (één label per klant).
 sources:
   gmail_label: pmax/klant-slug
+  # Blog: overzichtspagina of sitemap.xml. Voor `python -m pmax blog --client <slug>`.
+  blog_url: https://www.voorbeeld.nl/blog/
 
 # Oplevering
 handoff:

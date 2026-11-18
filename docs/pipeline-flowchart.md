@@ -15,8 +15,11 @@ flowchart TD
     Vraag --> Profiel{"2. Klantprofiel aanwezig?<br/>clients/{slug}.yaml"}
     Profiel -->|Nee| Init["Init: lege yaml aanmaken<br/>en samen invullen"]
     Init --> Profiel
-    Profiel -->|Ja| Gmail["3. Laatste nieuwsbrief<br/>ophalen via Gmail-label"]
-    Gmail --> Themas["4. Thema’s kiezen +<br/>landingspagina’s checken"]
+    Profiel -->|Ja| Bron{"Bron?"}
+    Bron -->|Nieuwsbrief| Gmail["3. Laatste nieuwsbrief<br/>ophalen via Gmail-label"]
+    Bron -->|Blog| Blog["3′. pmax blog<br/>artikelen + beelden scrapen"]
+    Gmail --> Themas
+    Blog --> Themas["4. Thema’s kiezen +<br/>landingspagina’s checken"]
     Themas --> Copy["5. Copy schrijven →<br/>campagnes/{slug}/{datum}.yaml"]
     Copy --> Extract["6a. Beelden uit email<br/>extracten → assets/…/base<br/>(bijlagen / inline / HTML CDN)"]
     Extract --> BeeldenOK{"Bruikbare<br/>contentbeelden?"}
@@ -49,7 +52,7 @@ flowchart TD
   classDef gate fill:#fff3cd,stroke:#b8860b,stroke-width:2px,color:#122
   classDef startend fill:#f0f0f0,stroke:#666,stroke-width:1px,color:#122
 
-  class Vraag,Profiel,Init,Gmail,Themas,Copy,Extract,BeeldenOK,ResOK,Upscale,VraagAI,AI agent
+  class Vraag,Profiel,Bron,Init,Gmail,Blog,Themas,Copy,Extract,BeeldenOK,ResOK,Upscale,VraagAI,AI agent
   class Images,FixYaml,Opleveren script
   class Validate gate
   class Start,StopBeeld,Mens,Klaar startend

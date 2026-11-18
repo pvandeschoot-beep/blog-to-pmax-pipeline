@@ -1,7 +1,7 @@
 [project]
 name = "pmax-pipeline"
-version = "0.2.0"
-description = "Newsletter to Performance Max creative pipeline"
+version = "0.3.0"
+description = "Newsletter or blog to Performance Max creative pipeline"
 requires-python = ">=3.10"
 dependencies = ["Pillow>=10.0.0", "PyYAML>=6.0"]
 

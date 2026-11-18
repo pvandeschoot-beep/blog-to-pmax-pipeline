@@ -194,3 +194,84 @@ def test_yaml_colon_trap_is_caught():
     ]
     issues = validate_campaign(data)
     assert any(i.level == ERROR and "geen tekst maar dict" in i.message for i in issues)
+
+
+# --- blog-scraper ---------------------------------------------------------
+
+from pmax import blog as blogmod
+
+POST_HTML = """<html><head><title>Fallback | Klant</title>
+<meta property="og:title" content="Wandelen in de Dolomieten">
+<meta name="description" content="Vijf routes voor beginners.">
+<meta property="article:published_time" content="2026-10-01T08:00:00Z">
+<meta property="og:image" content="/img/hero.jpg">
+</head><body>
+<header><img src="/img/logo.png"><nav><a href="/blog/">Blog</a></nav></header>
+<main><article><h1>Wandelen in de Dolomieten</h1>
+<p>Een inleiding die lang genoeg is om als echte alinea te tellen in de scraper.</p>
+<h2>Route 1: Seceda</h2>
+<p>De Seceda is een klassieker met uitzicht over de grillige pieken van de Odle.</p>
+<img src="/img/seceda-small.jpg" srcset="/img/seceda-800.jpg 800w, /img/seceda-1600.jpg 1600w">
+<img src="/img/icon-share.png" width="24" height="24">
+<img data-src="/img/lago.jpg" src="data:image/gif;base64,R0lGOD">
+</article></main>
+<footer><p>Footertekst die we niet willen meenemen in de alinea's van dit artikel.</p></footer>
+</body></html>"""
+
+
+def test_parse_post_extracts_text_and_content_images():
+    post = blogmod.parse_post(POST_HTML, "https://klant.nl/blog/dolomieten/")
+    assert post.title == "Wandelen in de Dolomieten"
+    assert post.description == "Vijf routes voor beginners."
+    assert post.published.startswith("2026-10-01")
+    assert post.headings == ["Route 1: Seceda"]
+    assert len(post.paragraphs) == 2 and not any("Footer" in p for p in post.paragraphs)
+    assert post.image_urls == [
+        "https://klant.nl/img/hero.jpg",
+        "https://klant.nl/img/seceda-1600.jpg",
+        "https://klant.nl/img/lago.jpg",
+    ]
+    assert post.slug == "dolomieten"
+
+
+def test_discover_from_index_keeps_only_articles():
+    html = """<a href="/blog/a/">A</a><a href="/blog/b#x">B</a><a href="/blog/a/">A</a>
+    <a href="/blog/">home</a><a href="/blog/page/2/">2</a><a href="/blog/tag/zon/">tag</a>
+    <a href="https://ander.nl/blog/c/">ext</a><a href="/over-ons/">over</a>"""
+    assert blogmod.discover_from_index(html, "https://klant.nl/blog/") == [
+        "https://klant.nl/blog/a/",
+        "https://klant.nl/blog/b",
+    ]
+
+
+def test_discover_from_sitemap_newest_first_and_filtered():
+    xml = """<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url><loc>https://klant.nl/blog/oud</loc><lastmod>2025-01-01</lastmod></url>
+    <url><loc>https://klant.nl/blog/nieuw</loc><lastmod>2026-10-01</lastmod></url>
+    <url><loc>https://klant.nl/contact</loc><lastmod>2026-11-01</lastmod></url>
+    </urlset>"""
+    assert blogmod.discover_from_sitemap(xml, "/blog/") == [
+        "https://klant.nl/blog/nieuw",
+        "https://klant.nl/blog/oud",
+    ]
+
+
+def test_download_images_flags_upscale(tmp_path: Path, monkeypatch):
+    from io import BytesIO
+
+    def fake_fetch(url, timeout=0):
+        size = (1600, 900) if "big" in url else (500, 400) if "mid" in url else (50, 50)
+        buf = BytesIO()
+        Image.new("RGB", size, "green").save(buf, "JPEG")
+        return buf.getvalue()
+
+    monkeypatch.setattr(blogmod, "fetch", fake_fetch)
+    post = blogmod.BlogPost(
+        url="https://klant.nl/blog/x", title="X",
+        image_urls=["https://k/big.jpg", "https://k/mid.jpg", "https://k/tiny.jpg"],
+    )
+    saved = blogmod.download_images(post, tmp_path)
+    assert [s["needs_upscale"] for s in saved] == [False, True]
+    assert all(Path(s["path"]).exists() for s in saved)
+    json_path, md_path = blogmod.write_report([post], tmp_path)
+    assert "upscale nodig" in md_path.read_text(encoding="utf-8")

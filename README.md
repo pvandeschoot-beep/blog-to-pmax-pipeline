@@ -1,11 +1,24 @@
-# Newsletter → PMax Creative Pipeline
+# Newsletter / Blog → PMax Creative Pipeline
 
-Van de **laatste nieuwsbrief van een klant** naar reviewbaar Performance Max-
+Van de **laatste nieuwsbrief** of **blogpagina's van een klant** naar reviewbaar Performance Max-
 materiaal: copy per thema, beelden in alle PMax-formaten, logo-overlay en een
 handoff naar het team. **Bronbeelden komen standaard uit die nieuwsbrief**
 (bijlagen / inline / HTML CDN). Te lage resolutie → AI-upscale van het
 mailbeeld (compositie behouden). Volledig nieuwe AI-beelden alleen als er geen
 bruikbare mailbeelden zijn, en dan pas na akkoord.
+
+**Blog als bron:** `python -m pmax blog` scrapet artikelen (los per URL, of de
+nieuwste van het blogoverzicht / `sitemap.xml` uit `sources.blog_url`) en
+levert per artikel tekst, tussenkoppen en contentbeelden in de map die
+`pmax images` daarna gebruikt. Zelfde upscale-regels als bij de nieuwsbrief.
+
+```bash
+python -m pmax blog --client <slug> --limit 5 --out-dir assets/<slug>/blog/2026-11-18
+python -m pmax blog --client <slug> --url https://klant.nl/blog/artikel \
+  --out-dir assets/<slug>/blog/2026-11-18
+python -m pmax images --client <slug> \
+  --input-dir assets/<slug>/blog/2026-11-18/base --output-dir runs/<slug>/2026-11-18
+```
 
 Er zit geen vaste klant of voorbeeldcampagne in deze repo. Elke run begint met:
 
@@ -21,6 +34,8 @@ voor het overzicht.
 |---|---|---|
 | Klant vragen / profiel kiezen | ✅ | |
 | Nieuwsbrief ophalen en lezen | ✅ | |
+| Blogartikelen scrapen (tekst + beelden) | | ✅ |
+| Blogartikelen lezen, thema's kiezen | ✅ | |
 | Thema's kiezen, copy schrijven | ✅ | |
 | Beelden uit de mail extraheren | ✅ | |
 | AI-upscale bij te lage resolutie | ✅ | |
@@ -118,6 +133,7 @@ runs/{slug}/{datum}/    # gegenereerde PMax-ratio's
 pmax/
 ├── specs.py            # Google's getallen
 ├── client.py           # klantprofiel laden en mengen
+├── blog.py             # blogartikelen scrapen (tekst + contentbeelden)
 ├── validate.py
 ├── images.py
 ├── render.py

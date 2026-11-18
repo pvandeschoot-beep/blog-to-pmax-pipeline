@@ -7,9 +7,11 @@ Dit bestand is voor de agent die de pipeline draait. De mens leest `README.md`.
 Er staan **geen** vooringevulde campagnes of klantcopy in deze repo. Elke run
 begint met een vraag aan de gebruiker:
 
-> Voor welke klant wil je PMax-assets op basis van de laatste nieuwsbrief?
+> Voor welke klant wil je PMax-assets, en op basis van wat: de laatste
+> nieuwsbrief, of blogpagina's van de klant?
 
-Wacht op het antwoord (slug of naam). Doe **niets** vóór die klant bekend is:
+Wacht op het antwoord (slug of naam + bron). Bij blog: vraag welke artikelen
+(losse URL's) of neem de nieuwste uit `sources.blog_url`. Doe **niets** vóór die klant bekend is:
 geen mail zoeken, geen copy verzinnen, geen AI-beelden genereren.
 
 Daarna:
@@ -18,7 +20,8 @@ Daarna:
 2. Ontbreekt het → `python -m pmax init --client <slug>` en vraag de gebruiker
    de lege `clients/<slug>.yaml` in te vullen (base_url, logo, gmail_label,
    forbidden_terms). Stop tot dat klaar is.
-3. Haal de **laatste** nieuwsbrief op via Gmail (label uit het profiel).
+3. Haal de bron op: de **laatste** nieuwsbrief via Gmail (label uit het
+   profiel), **of** de blogartikelen via `python -m pmax blog` (zie §1b).
 4. Bouw `campagnes/<slug>/<datum>.yaml` vanuit die mail — leeg starten, niets
    hergebruiken van eerdere klanten.
 5. Valideer, bundle, draft-handoff. Verstuur nooit zelf.
@@ -82,6 +85,44 @@ Vraag bevestiging als er twijfel is welke mail de juiste is.
 
 Haal uit de mail: thema's, USP's, tone of voice, genoemde prijzen. Bewaar het
 `messageId` — bij stap 5 download je de beelden uit dezelfde mail.
+
+### 1b. Bron ophalen — blogpagina's (alternatief voor de nieuwsbrief)
+
+Gebruik dit als de gebruiker voor blog kiest. Geen Gmail nodig.
+
+```
+# nieuwste artikelen van het blogoverzicht (of sitemap.xml) uit het profiel
+python -m pmax blog --client {slug} --limit 5 \
+  --out-dir assets/{slug}/blog/{datum}
+
+# of specifieke artikelen
+python -m pmax blog --client {slug} \
+  --url https://www.klant.nl/blog/artikel-a \
+  --url https://www.klant.nl/blog/artikel-b \
+  --out-dir assets/{slug}/blog/{datum}
+```
+
+Dit schrijft:
+
+- `posts.md` — per artikel titel, datum, intro, tussenkoppen, eerste alinea's
+  en de gedownloade beelden met resolutie (⚠ = upscale nodig). Lees dit.
+- `posts.json` — hetzelfde, volledig (alle alinea's).
+- `base/{artikel-slug}-NN.jpg` — contentbeelden uit het artikel (og:image +
+  beelden binnen `<article>`/`<main>`; logo's, iconen, avatars en social
+  buttons worden overgeslagen).
+
+Toon de gebruiker welke artikelen je gebruikt en welke thema's je eruit haalt.
+Eén artikel = meestal één asset group. Het artikel zelf is vaak een goede
+landingspagina, maar een commerciële pagina waar het artikel naar linkt kan
+beter converteren — controleer in §2.
+
+Lukt scrapen niet (JS-only site, blokkade): vraag de gebruiker om de
+artikel-URL's en lees ze met WebFetch; beelden dan handmatig in
+`assets/{slug}/blog/{datum}/base/` zetten.
+
+Alle stappen hierna gelden voor beide bronnen. Waar "de mail" staat, lees bij
+blog "het artikel"; §5a vervalt (beelden staan al in `base/`), §5b–5e gelden
+onverkort. Zet in de campagne-yaml `source.type: blog` en `source.urls`.
 
 ### 2. Landingspagina's controleren
 
@@ -277,7 +318,7 @@ naar het team — alleen als de gebruiker dat vraagt.
 - Prijsclaim alleen als die prijs op de landingspagina staat.
 - Respecteer `forbidden_terms`; de validator dwingt dit af.
 - Copy, beeld en thema 1-op-1; geen hergebruik tussen asset groups of klanten.
-- Bronbeelden uit de nieuwsbrief; te klein → AI-upscale (zelfde compositie);
+- Bronbeelden uit de bron (nieuwsbrief of blog); te klein → AI-upscale (zelfde compositie);
   volledig nieuwe AI-beelden alleen na expliciet akkoord.
 - Verstuur nooit zelf een mail en publiceer nooit zelf een campagne.
 - `pmax validate` moet groen zijn voor je iets deelt.

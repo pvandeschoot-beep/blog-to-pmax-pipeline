@@ -3,7 +3,8 @@
     clients    toon de bekende klantprofielen
     init       zet een nieuw klantprofiel en/of campagne op
     validate   campaign.yaml tegen de PMax-specs (de poort voor oplevering)
-    images     bronbeelden (vaak uit nieuwsbrief) -> PMax-ratio's + logo
+    blog       blogpagina's van de klant scrapen -> tekst + bronbeelden
+    images     bronbeelden (nieuwsbrief of blog) -> PMax-ratio's + logo
     handoff    handoff-mail als markdown
     export     review-CSV met alle tekst-assets
     bundle     zip per campagne
@@ -29,6 +30,7 @@ from .client import (
     load_client,
     resolve_campaign,
 )
+from . import blog
 from .images import make_pmax_formats
 from .render import render_handoff, write_review_csv
 from .validate import ERROR, WARNING, has_errors, validate_campaign
@@ -76,7 +78,7 @@ def _campaign_skeleton(slug: str) -> str:
 client_slug: {slug}
 campaign: Naam van de campagne
 source:
-  type: newsletter
+  type: newsletter                # newsletter | blog
   subject: "Onderwerp van de nieuwsbrief"
   date: "JJJJ-MM-DD"
 
@@ -161,6 +163,57 @@ def _collect_image_sources(input_dir: Path, glob_pat: str) -> list[Path]:
             if p.is_file() and p.suffix.lower() in _IMAGE_SOURCE_EXTS
         )
     return sorted(p for p in input_dir.glob(glob_pat) if p.is_file())
+
+
+def cmd_blog(args: argparse.Namespace) -> int:
+    """Scrape blogartikelen: losse --url's, of de nieuwste uit het blogoverzicht."""
+    urls: list[str] = list(args.url or [])
+    if not urls:
+        index = args.index
+        if not index and args.client:
+            try:
+                client = load_client(args.client, args.root)
+            except ClientError as exc:
+                print(f"fout: {exc}", file=sys.stderr)
+                return 2
+            index = (client.get("sources") or {}).get("blog_url")
+        if not index:
+            print("geef --url, --index of sources.blog_url in het klantprofiel", file=sys.stderr)
+            return 2
+        try:
+            if index.endswith(".xml"):
+                urls = blog.discover_from_sitemap(blog.fetch_text(index), args.path_prefix or "")
+            else:
+                urls = blog.discover_from_index(blog.fetch_text(index), index)
+        except Exception as exc:
+            print(f"overzicht ophalen mislukt ({index}): {exc}", file=sys.stderr)
+            return 1
+        if not urls:
+            print(f"geen artikelen gevonden op {index}; geef ze los mee met --url", file=sys.stderr)
+            return 1
+        urls = urls[: args.limit]
+
+    posts = []
+    for url in urls:
+        try:
+            post = blog.parse_post(blog.fetch_text(url), url)
+        except Exception as exc:
+            print(f"overgeslagen {url}: {exc}", file=sys.stderr)
+            continue
+        if not args.no_images:
+            blog.download_images(post, args.out_dir / "base", max_images=args.max_images)
+        n_img = sum(1 for i in post.images if "path" in i)
+        n_up = sum(1 for i in post.images if i.get("needs_upscale"))
+        print(f"{post.slug}: '{post.title[:60]}' — {len(post.paragraphs)} alinea's, "
+              f"{n_img} beeld(en){f', {n_up} te klein' if n_up else ''}")
+        posts.append(post)
+
+    if not posts:
+        print("geen enkel artikel opgehaald", file=sys.stderr)
+        return 1
+    json_path, md_path = blog.write_report(posts, args.out_dir)
+    print(f"\n{len(posts)} artikel(en) -> {md_path} en {json_path}")
+    return 0
 
 
 def cmd_images(args: argparse.Namespace) -> int:
@@ -260,6 +313,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--skip-images", action="store_true")
     p.add_argument("--strict", action="store_true", help="laat ook warnings falen")
     p.set_defaults(func=cmd_validate)
+
+    p = sub.add_parser("blog", help="scrape blogartikelen van de klant (tekst + bronbeelden)")
+    p.add_argument("--client", default=None, help="gebruikt sources.blog_url uit het klantprofiel")
+    p.add_argument("--url", action="append", help="artikel-URL; mag vaker. Slaat discovery over")
+    p.add_argument("--index", default=None, help="blogoverzicht of sitemap.xml (overschrijft profiel)")
+    p.add_argument("--path-prefix", default=None, help="alleen sitemap-URL's onder dit pad, bijv. /blog/")
+    p.add_argument("--limit", type=int, default=5, help="max aantal artikelen uit het overzicht")
+    p.add_argument("--max-images", type=int, default=6, help="max beelden per artikel")
+    p.add_argument("--out-dir", type=Path, required=True, help="bijv. assets/<slug>/blog/<datum>")
+    p.add_argument("--no-images", action="store_true", help="alleen tekst ophalen")
+    p.set_defaults(func=cmd_blog)
 
     p = sub.add_parser(
         "images",
